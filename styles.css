@@ -146,6 +146,26 @@ body {
   filter: drop-shadow(0 0 12px rgba(79, 110, 247, 0.25));
 }
 
+/* لوگوی تصویری — سمت چپ صفحه */
+.logo-img-link {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.logo-img {
+  height: 52px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  border-radius: 10px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.logo-img:hover {
+  transform: scale(1.05);
+  opacity: 0.92;
+}
+
 /* ساعت عقربه‌ای + تاریخ شمسی */
 .clock-date-wrap {
   display: flex;
@@ -1029,6 +1049,7 @@ body {
   .header-center { order: 3; max-width: 100%; width: 100%; }
   .logo { font-size: 1.5rem; gap: 8px; }
   .logo-icon { width: 44px; height: 44px; font-size: 1.3rem; border-radius: 12px; }
+  .logo-img { height: 40px; max-width: 120px; }
   .clock-date-wrap { padding: 4px 8px 4px 4px; gap: 6px; border-radius: 12px; }
   .analog-clock { width: 40px; height: 40px; }
   .clock-mark { transform-origin: 50% 16px; top: 3px; height: 4px; }
