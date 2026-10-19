@@ -1,129 +1,244 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>علی گلکاران | LinkBox</title>
-    
-    <!-- فونت وزیرمتن برای زیبایی بیشتر -->
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-
-    <style>
-        /* تنظیمات کلی صفحه */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Vazirmatn', sans-serif;
-            background-color: #f4f4f5; /* یه رنگ خاکستری خیلی روشن و تمیز */
-            color: #333;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            direction: rtl; /* راست چین بودن کل صفحه */
-        }
-
-        /* بخش هدر (بالای صفحه) */
-        .header {
-            width: 100%;
-            max-width: 800px; /* حداکثر عرض صفحه */
-            display: flex;
-            justify-content: flex-start; /* چیدن عکس در سمت چپ */
-            padding: 20px 20px 10px 20px;
-            margin-bottom: 20px;
-        }
-
-        /* استایل لوگو */
-        .main-logo {
-            width: 100%;
-            max-width: 280px; /* عرض لوگو در دسکتاپ */
-            height: auto;
-            border-radius: 12px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e4e4e7; /* یه حاشیه خیلی نازک برای زیبایی */
-            transition: transform 0.3s ease;
-        }
-
-        .main-logo:hover {
-            transform: scale(1.02); /* افکت زوم خیلی ملایم هنگام بردن موس روی عکس */
-        }
-
-        /* بخش اصلی محتوا (لینک‌ها) */
-        .container {
-            width: 100%;
-            max-width: 600px;
-            padding: 0 20px 40px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px; /* فاصله بین دکمه‌ها */
-        }
-
-        /* استایل دکمه‌های لینک */
-        .link-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #ffffff;
-            color: #27272a;
-            text-decoration: none;
-            padding: 18px 20px;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-            border: 1px solid #e4e4e7;
-            transition: all 0.2s ease;
-        }
-
-        .link-btn:hover {
-            background-color: #fafafa;
-            border-color: #d4d4d8;
-            transform: translateY(-2px); /* کمی بالا اومدن هنگام هاور */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        /* تنظیمات مخصوص موبایل */
-        @media (max-width: 600px) {
-            .header {
-                padding: 15px 15px 0 15px;
-                margin-bottom: 15px;
-            }
-            .main-logo {
-                max-width: 100%; /* در موبایل عکس کل عرض رو می‌گیره */
-            }
-            .container {
-                padding: 0 15px 30px 15px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لینک‌باکس</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
-
-    <!-- هدر: اینجا عکس سمت چپ قرار می‌گیره -->
+  <div class="app">
+    <!-- هدر -->
     <header class="header">
-        <img src="logoAli.png" alt="علی گلکاران - طراح و برنامه‌نویس" class="main-logo">
+      <div class="header-right">
+        <div class="logo">
+          <span class="logo-icon">✦</span>
+          <span class="logo-text">لینک‌باکس</span>
+        </div>
+      </div>
+      <div class="header-center">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input type="text" id="search-input" placeholder="جستجو در لینک‌ها..." autocomplete="off" />
+          <button id="search-clear" class="search-clear hidden" title="پاک کردن">✕</button>
+        </div>
+      </div>
+      <div class="header-left">
+        <div class="clock-date-wrap">
+          <div class="analog-clock" id="analog-clock" title="ساعت">
+            <div class="clock-face">
+              <div class="clock-mark" style="--i:0"></div>
+              <div class="clock-mark" style="--i:1"></div>
+              <div class="clock-mark" style="--i:2"></div>
+              <div class="clock-mark" style="--i:3"></div>
+              <div class="clock-mark" style="--i:4"></div>
+              <div class="clock-mark" style="--i:5"></div>
+              <div class="clock-mark" style="--i:6"></div>
+              <div class="clock-mark" style="--i:7"></div>
+              <div class="clock-mark" style="--i:8"></div>
+              <div class="clock-mark" style="--i:9"></div>
+              <div class="clock-mark" style="--i:10"></div>
+              <div class="clock-mark" style="--i:11"></div>
+              <div class="hand hour-hand" id="hour-hand"></div>
+              <div class="hand minute-hand" id="minute-hand"></div>
+              <div class="hand second-hand" id="second-hand"></div>
+              <div class="clock-center"></div>
+            </div>
+          </div>
+          <div class="jalali-date" id="jalali-date">
+            <span class="jalali-weekday" id="jalali-weekday">—</span>
+            <span class="jalali-full" id="jalali-full">—</span>
+          </div>
+        </div>
+        <button id="theme-toggle" class="theme-btn" title="تغییر تم (روشن / دارک / طوسی)">
+          <span class="theme-icon">🌙</span>
+        </button>
+      </div>
     </header>
 
-    <!-- بخش لینک‌ها -->
-    <main class="container">
-        <!-- این لینک‌ها رو می‌تونی به دلخواه تغییر بدی -->
-        <a href="https://github.com/golkarana-beep" target="_blank" class="link-btn">
-            🐙 گیت‌هاب من
-        </a>
-        <a href="#" target="_blank" class="link-btn">
-            🎨 نمونه کارها
-        </a>
-        <a href="#" target="_blank" class="link-btn">
-            📱 اینستاگرام
-        </a>
-        <a href="#" target="_blank" class="link-btn">
-            ✉️ ارتباط با من
-        </a>
-    </main>
+    <!-- نوار ابزار -->
+    <div class="toolbar">
+      <button id="add-link-btn" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        افزودن لینک
+      </button>
+      <button id="add-category-btn" class="btn btn-secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        دسته‌بندی جدید
+      </button>
+      <button id="sync-settings-btn" class="btn btn-secondary" title="ورود مدیر">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        همگام‌سازی
+      </button>
+      <span id="sync-status" class="sync-status" title="وضعیت همگام‌سازی"></span>
+    </div>
 
+    <!-- نوار افقی دسته‌بندی‌ها (۳ بعدی) -->
+    <div class="categories-bar-wrap">
+      <div class="categories-bar" id="category-list"></div>
+    </div>
+
+    <!-- لیست لینک‌ها -->
+    <section class="content">
+      <div class="content-header">
+        <h2 id="current-category-title">همه لینک‌ها</h2>
+        <span id="link-count" class="badge">0</span>
+      </div>
+      <div id="links-container" class="links-grid"></div>
+      <div id="empty-state" class="empty-state hidden">
+        <div class="empty-icon">📦</div>
+        <p class="empty-title">هنوز لینکی نیست</p>
+        <p class="empty-desc">روی «افزودن لینک» کلیک کنید و اولین لینک را بسازید</p>
+      </div>
+      <div id="no-results" class="empty-state hidden">
+        <div class="empty-icon">🔍</div>
+        <p class="empty-title">نتیجه‌ای پیدا نشد</p>
+        <p class="empty-desc">عبارت جستجو را تغییر دهید</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- مودال افزودن/ویرایش لینک -->
+  <div id="link-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="link-modal-title">افزودن لینک جدید</h3>
+        <button class="modal-close" data-close="link-modal">✕</button>
+      </div>
+      <form id="link-form" class="modal-body">
+        <input type="hidden" id="link-id" />
+        <input type="hidden" id="link-image-data" />
+
+        <!-- پیش‌نمایش و انتخاب عکس -->
+        <div class="image-preview-area">
+          <div id="image-preview" class="image-preview">
+            <span class="preview-placeholder">📷</span>
+          </div>
+          <div class="image-inputs">
+            <div class="form-group">
+              <label>عکس لینک</label>
+              <div class="image-source-tabs">
+                <button type="button" class="img-tab active" data-tab="url">از اینترنت</button>
+                <button type="button" class="img-tab" data-tab="file">از هارد</button>
+              </div>
+            </div>
+            <div id="img-url-panel" class="img-panel">
+              <input type="url" id="link-image" placeholder="https://example.com/image.jpg" />
+              <p class="hint">خالی = فاویکون خودکار سایت (برای آفلاین ذخیره می‌شود)</p>
+            </div>
+            <div id="img-file-panel" class="img-panel hidden">
+              <label class="file-drop" for="link-image-file">
+                <input type="file" id="link-image-file" accept="image/*" hidden />
+                <span class="file-drop-text">کلیک یا فایل را بکشید</span>
+                <span class="file-drop-hint">PNG, JPG, WebP — حداکثر ۲ مگابایت</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="link-title">عنوان</label>
+          <input type="text" id="link-title" placeholder="مثلاً گوگل" required />
+        </div>
+        <div class="form-group">
+          <label for="link-url">آدرس لینک</label>
+          <input type="url" id="link-url" placeholder="https://example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="link-category">دسته‌بندی</label>
+          <select id="link-category" required></select>
+        </div>
+        <div class="form-group">
+          <label for="link-desc">توضیحات (اختیاری)</label>
+          <textarea id="link-desc" rows="2" placeholder="توضیح کوتاه..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="link-modal">انصراف</button>
+          <button type="submit" class="btn btn-primary">ذخیره</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- مودال افزودن دسته‌بندی -->
+  <div id="category-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3>افزودن دسته‌بندی</h3>
+        <button class="modal-close" data-close="category-modal">✕</button>
+      </div>
+      <form id="category-form" class="modal-body">
+        <div class="form-group">
+          <label for="category-name">نام دسته‌بندی</label>
+          <input type="text" id="category-name" placeholder="مثلاً کار، سرگرمی، آموزش" required />
+        </div>
+        <div class="form-group">
+          <label>رنگ</label>
+          <div class="color-picker" id="color-picker">
+            <button type="button" class="color-swatch active" data-color="#4f6ef7" style="background:#4f6ef7"></button>
+            <button type="button" class="color-swatch" data-color="#e74c3c" style="background:#e74c3c"></button>
+            <button type="button" class="color-swatch" data-color="#27ae60" style="background:#27ae60"></button>
+            <button type="button" class="color-swatch" data-color="#f39c12" style="background:#f39c12"></button>
+            <button type="button" class="color-swatch" data-color="#9b59b6" style="background:#9b59b6"></button>
+            <button type="button" class="color-swatch" data-color="#1abc9c" style="background:#1abc9c"></button>
+            <button type="button" class="color-swatch" data-color="#e91e63" style="background:#e91e63"></button>
+            <button type="button" class="color-swatch" data-color="#607d8b" style="background:#607d8b"></button>
+          </div>
+          <input type="hidden" id="category-color" value="#4f6ef7" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="category-modal">انصراف</button>
+          <button type="submit" class="btn btn-primary">افزودن</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- مودال تأیید حذف -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3>تأیید حذف</h3>
+        <button class="modal-close" data-close="confirm-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message">آیا مطمئن هستید؟</p>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="confirm-modal">انصراف</button>
+          <button type="button" id="confirm-delete-btn" class="btn btn-danger">حذف</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ورود امن مدیر -->
+  <div id="sync-modal" class="modal hidden">
+    <div class="modal-overlay" data-close="sync-modal"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3>ورود مدیر لینک‌باکس</h3>
+        <button class="modal-close" data-close="sync-modal">✕</button>
+      </div>
+      <form id="admin-login-form" class="modal-body">
+        <p class="sync-intro">برای مدیریت لینک‌ها، با حساب مدیر وارد شوید.</p>
+        <div class="form-group"><label for="admin-email">ایمیل مدیر</label><input type="email" id="admin-email" autocomplete="username" required dir="ltr" /></div>
+        <div class="form-group"><label for="admin-password">رمز عبور</label><input type="password" id="admin-password" autocomplete="current-password" required dir="ltr" /></div>
+        <div id="sync-message" class="sync-message hidden"></div>
+        <div class="modal-footer"><button type="button" id="admin-logout-btn" class="btn btn-secondary hidden">خروج مدیر</button><button type="submit" class="btn btn-primary">ورود</button></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
