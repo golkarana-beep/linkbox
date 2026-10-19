@@ -1,6 +1,7 @@
 // ========== مدیریت داده‌ها (LocalStorage + ابر) ==========
 const STORAGE_KEY = "link-manager-data-v3";
 const SYNC_CONFIG_KEY = "link-manager-sync-config";
+const LOCAL_THEME_KEY = "linkbox-local-theme-v1";
 const SUPABASE_URL = window.LINKBOX_CONFIG?.supabaseUrl || "";
 const SUPABASE_ANON_KEY = window.LINKBOX_CONFIG?.supabaseAnonKey || "";
 const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes("YOUR_PROJECT")) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -113,12 +114,21 @@ let pendingDelete = null;
 const THEMES = ["light", "dark", "slate"];
 const THEME_ICONS = { light: "🌙", dark: "☀️", slate: "🩶" };
 
+function getSavedLocalTheme() {
+  try {
+    const saved = localStorage.getItem(LOCAL_THEME_KEY);
+    return THEMES.includes(saved) ? saved : null;
+  } catch { return null; }
+}
+
 function applyTheme(theme) {
   if (!THEMES.includes(theme)) theme = "light";
   document.documentElement.setAttribute("data-theme", theme);
   themeIcon.textContent = THEME_ICONS[theme] || "🌙";
   state.theme = theme;
-  saveData(state);
+  // Theme is a device-only preference; never sync it to the shared cloud record.
+  try { localStorage.setItem(LOCAL_THEME_KEY, theme); } catch (e) { console.warn("Could not save local theme", e); }
+  saveData(state, { skipCloud: true });
 }
 
 function toggleTheme() {
@@ -791,7 +801,7 @@ function getCloudPayload() {
   return {
     categories: state.categories,
     links: state.links,
-    theme: state.theme,
+    // Intentionally omit theme: each browser/device keeps its own appearance.
     activeCategory: state.activeCategory,
     updatedAt: state.updatedAt || Date.now(),
   };
@@ -825,9 +835,10 @@ async function pullFromCloud(showAlert = true) {
     if (!remote.categories.some(c => c.id === "all")) remote.categories.unshift({ id:"all", name:"همه لینک‌ها", isSystem:true, color:"#4f6ef7" });
     remote.categories.forEach(c => { if (!c.color) c.color = "#4f6ef7"; });
     if (!Array.isArray(remote.links)) remote.links = [];
-    state = { ...defaultData, ...remote };
+    const deviceTheme = getSavedLocalTheme() || state.theme || "light";
+    state = { ...defaultData, ...remote, theme: deviceTheme };
     saveData(state, { skipCloud: true });
-    applyTheme(state.theme || "light"); renderCategories(); renderLinks(); updateAdminUI();
+    applyTheme(deviceTheme); renderCategories(); renderLinks(); updateAdminUI();
     setSyncStatus("همگام با سرور ✓", "ok");
     if (showAlert) showSyncMessage("اطلاعات مشترک دریافت شد.", "ok");
     return true;
@@ -931,7 +942,15 @@ document.getElementById("import-file")?.addEventListener("change", (e) => {
 });
 
 // ========== شروع ==========
-applyTheme(state.theme || "light");
+// Restore this device's own theme before cloud data is loaded.
+applyTheme(getSavedLocalTheme() || state.theme || "light");
+
+// Cache the app shell so the page can open after it has been visited online once.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((err) => console.warn("Offline cache unavailable", err));
+  });
+}
 renderCategories();
 renderLinks();
 updateClock();
