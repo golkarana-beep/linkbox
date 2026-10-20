@@ -4,6 +4,9 @@ const SYNC_CONFIG_KEY = "link-manager-sync-config";
 const LOCAL_THEME_KEY = "linkbox-local-theme-v1";
 const PERSONAL_CATEGORY_ID = "personal";
 const GUEST_LINKS_KEY = "linkbox-guest-personal-links-v1";
+const ACTIVE_CATEGORY_KEY = "linkbox-active-category-v1";
+function loadActiveCategory() { try { return localStorage.getItem(ACTIVE_CATEGORY_KEY) || null; } catch { return null; } }
+function saveActiveCategory(id) { try { localStorage.setItem(ACTIVE_CATEGORY_KEY, id); } catch {} }
 function loadGuestLinks() { try { const value = JSON.parse(localStorage.getItem(GUEST_LINKS_KEY) || "[]"); return Array.isArray(value) ? value : []; } catch { return []; } }
 let guestLinks = loadGuestLinks();
 function saveGuestLinks() { try { localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks)); } catch { alert("حافظه مرورگر پر شده است؛ بعضی لینک‌ها ذخیره نشدند."); } }
@@ -77,6 +80,8 @@ function saveData(data, options = {}) {
 }
 
 let state = loadData();
+const rememberedCategory = loadActiveCategory();
+if (rememberedCategory) state.activeCategory = rememberedCategory;
 ensurePersonalCategory();
 let searchQuery = "";
 let pendingImageData = null;
@@ -303,6 +308,7 @@ function renderCategories() {
     btn.addEventListener("click", (e) => {
       if (e.target.closest("[data-action]")) return;
       state.activeCategory = cat.id;
+      saveActiveCategory(cat.id);
       saveData(state);
       renderCategories();
       renderLinks();
@@ -413,6 +419,8 @@ function renderLinks() {
       </div>
     `;
 
+    card.querySelector('[data-action="edit"]').dataset.linkId = link.id;
+    card.querySelector('[data-action="delete"]').dataset.linkId = link.id;
     card.querySelector('[data-action="edit"]').addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -546,6 +554,8 @@ async function handleLinkSubmit(e) {
     else guestLinks.push(personalLink);
     saveGuestLinks();
     state.activeCategory = PERSONAL_CATEGORY_ID;
+    saveActiveCategory(PERSONAL_CATEGORY_ID);
+    saveData(state, { skipCloud: true });
     closeModal("link-modal");
     renderCategories();
     renderLinks();
@@ -733,13 +743,18 @@ function openConfirm(message, payload) {
 function handleConfirmDelete() {
   if (!pendingDelete) return;
   if (pendingDelete.type === "link") {
-    state.links = state.links.filter((l) => l.id !== pendingDelete.id);
+    if (!adminSession && guestLinks.some(l => l.id === pendingDelete.id)) {
+      guestLinks = guestLinks.filter(l => l.id !== pendingDelete.id);
+      saveGuestLinks();
+    } else if (adminSession) {
+      state.links = state.links.filter((l) => l.id !== pendingDelete.id);
+    }
   } else if (pendingDelete.type === "category") {
     state.links = state.links.map((l) =>
       l.categoryId === pendingDelete.id ? { ...l, categoryId: null } : l
     );
     state.categories = state.categories.filter((c) => c.id !== pendingDelete.id);
-    if (state.activeCategory === pendingDelete.id) state.activeCategory = "all";
+    if (state.activeCategory === pendingDelete.id) { state.activeCategory = "all"; saveActiveCategory("all"); }
   }
   pendingDelete = null;
   saveData(state);
@@ -860,10 +875,10 @@ async function pullFromCloud(showAlert = true) {
     remote.categories.forEach(c => { if (!c.color) c.color = "#4f6ef7"; });
     if (!Array.isArray(remote.links)) remote.links = [];
     const deviceTheme = getSavedLocalTheme() || state.theme || "light";
-    const localActiveCategory = state.activeCategory;
+    const localActiveCategory = loadActiveCategory() || state.activeCategory;
     state = { ...defaultData, ...remote, theme: deviceTheme, activeCategory: localActiveCategory };
     ensurePersonalCategory();
-    if (!state.categories.some(c => c.id === state.activeCategory)) state.activeCategory = "all";
+    if (!state.categories.some(c => c.id === state.activeCategory)) { state.activeCategory = "all"; saveActiveCategory("all"); }
     saveData(state, { skipCloud: true });
     applyTheme(deviceTheme); renderCategories(); renderLinks(); updateAdminUI();
     setSyncStatus("همگام با سرور ✓", "ok");
@@ -887,7 +902,12 @@ function updateAdminUI() {
   const btn = document.getElementById("sync-settings-btn");
   if (btn) btn.textContent = isAdmin ? "مدیر (خروج)" : "ورود مدیر";
   const logout = document.getElementById("admin-logout-btn"); if (logout) logout.classList.toggle("hidden", !isAdmin);
-  document.querySelectorAll('[data-action="edit"], [data-action="delete"], .cat-delete').forEach(el => el.classList.toggle("hidden", !isAdmin));
+  document.querySelectorAll('[data-action="edit"], [data-action="delete"], .cat-delete').forEach(el => {
+    const card = el.closest(".link-card");
+    const linkId = card?.querySelector('[data-action="edit"]') ? (card.querySelector('[data-action="edit"]').dataset.linkId || null) : null;
+    const guestOwnsLink = !isAdmin && state.activeCategory === PERSONAL_CATEGORY_ID && guestLinks.some(l => l.id === (el.dataset.linkId || linkId) || (card && l.url === card.href));
+    el.classList.toggle("hidden", !isAdmin && !guestOwnsLink);
+  });
 }
 
 async function initializeCloud() {
@@ -998,4 +1018,11 @@ window.addEventListener("online", () => {
 // Guest mode: block any mutation form submission unless an authenticated manager is present.
 document.getElementById("category-form")?.addEventListener("submit", e => { if (!adminSession) { e.preventDefault(); e.stopImmediatePropagation(); openSyncModal(); } }, true);
 
-document.addEventListener("click", (e) => { if (!adminSession && e.target.closest('[data-action="edit"], [data-action="delete"], .cat-delete')) { e.preventDefault(); e.stopImmediatePropagation(); openSyncModal(); } }, true);
+document.addEventListener("click", (e) => {
+  const action = e.target.closest('[data-action="edit"], [data-action="delete"], .cat-delete');
+  if (!action || adminSession) return;
+  const linkId = action.dataset.linkId;
+  const isGuestPersonalLink = state.activeCategory === PERSONAL_CATEGORY_ID && !!linkId && guestLinks.some(l => l.id === linkId);
+  if (isGuestPersonalLink && (action.dataset.action === "edit" || action.dataset.action === "delete")) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+}, true);
