@@ -2,6 +2,12 @@
 const STORAGE_KEY = "link-manager-data-v3";
 const SYNC_CONFIG_KEY = "link-manager-sync-config";
 const LOCAL_THEME_KEY = "linkbox-local-theme-v1";
+const PERSONAL_CATEGORY_ID = "personal";
+const GUEST_LINKS_KEY = "linkbox-guest-personal-links-v1";
+function loadGuestLinks() { try { const value = JSON.parse(localStorage.getItem(GUEST_LINKS_KEY) || "[]"); return Array.isArray(value) ? value : []; } catch { return []; } }
+let guestLinks = loadGuestLinks();
+function saveGuestLinks() { try { localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks)); } catch { alert("حافظه مرورگر پر شده است؛ بعضی لینک‌ها ذخیره نشدند."); } }
+function ensurePersonalCategory() { if (!state.categories.some(c => c.id === PERSONAL_CATEGORY_ID)) state.categories.push({ id: PERSONAL_CATEGORY_ID, name: "شخصی", isSystem: true, color: "#9b59b6" }); }
 const SUPABASE_URL = window.LINKBOX_CONFIG?.supabaseUrl || "";
 const SUPABASE_ANON_KEY = window.LINKBOX_CONFIG?.supabaseAnonKey || "";
 const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes("YOUR_PROJECT")) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -71,6 +77,7 @@ function saveData(data, options = {}) {
 }
 
 let state = loadData();
+ensurePersonalCategory();
 let searchQuery = "";
 let pendingImageData = null;
 
@@ -273,7 +280,9 @@ function renderCategories() {
     const count =
       cat.id === "all"
         ? state.links.length
-        : state.links.filter((l) => l.categoryId === cat.id).length;
+        : cat.id === PERSONAL_CATEGORY_ID
+          ? guestLinks.length
+          : state.links.filter((l) => l.categoryId === cat.id).length;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -285,7 +294,7 @@ function renderCategories() {
       <span>${escapeHtml(cat.name)}</span>
       <span class="cat-count">${count}</span>
       ${
-        !cat.isSystem
+        (!cat.isSystem && cat.id !== PERSONAL_CATEGORY_ID)
           ? `<span class="cat-delete" data-action="delete-cat" title="حذف دسته‌بندی">✕</span>`
           : ""
       }
@@ -329,9 +338,11 @@ function lighten(hex, percent) {
 // ========== فیلتر ==========
 function getFilteredLinks() {
   let links =
-    state.activeCategory === "all"
-      ? [...state.links]
-      : state.links.filter((l) => l.categoryId === state.activeCategory);
+    state.activeCategory === PERSONAL_CATEGORY_ID
+      ? [...guestLinks]
+      : state.activeCategory === "all"
+        ? [...state.links]
+        : state.links.filter((l) => l.categoryId === state.activeCategory);
 
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -435,7 +446,7 @@ function getDomain(url) {
 // ========== مودال لینک ==========
 function populateCategorySelect(selectedId = null) {
   linkCategorySelect.innerHTML = "";
-  const cats = state.categories.filter((c) => !c.isSystem);
+  const cats = adminSession ? state.categories.filter((c) => !c.isSystem && c.id !== PERSONAL_CATEGORY_ID) : state.categories.filter((c) => c.id === PERSONAL_CATEGORY_ID);
   if (cats.length === 0) {
     const opt = document.createElement("option");
     opt.value = "";
@@ -477,7 +488,7 @@ function openLinkModal(link = null) {
     linkDescInput.value = "";
     linkImageInput.value = "";
     linkImageDataInput.value = "";
-    populateCategorySelect(state.activeCategory !== "all" ? state.activeCategory : null);
+    populateCategorySelect(adminSession ? (state.activeCategory !== "all" && state.activeCategory !== PERSONAL_CATEGORY_ID ? state.activeCategory : null) : PERSONAL_CATEGORY_ID);
   }
   updateImagePreview();
   openModal("link-modal");
@@ -526,6 +537,20 @@ async function handleLinkSubmit(e) {
     return;
   }
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+
+  // مهمان فقط لینک‌های دسته‌بندی شخصی خودش را در همین مرورگر مدیریت می‌کند.
+  if (!adminSession) {
+    const personalLink = { id: id || ("guest-link-" + Date.now()), title, url, categoryId: PERSONAL_CATEGORY_ID, desc, image: linkImageInput.value.trim() || null, imageCached: pendingImageData || linkImageDataInput.value || null, createdAt: Date.now() };
+    const existing = guestLinks.findIndex(l => l.id === id);
+    if (existing >= 0) guestLinks[existing] = { ...guestLinks[existing], ...personalLink };
+    else guestLinks.push(personalLink);
+    saveGuestLinks();
+    state.activeCategory = PERSONAL_CATEGORY_ID;
+    closeModal("link-modal");
+    renderCategories();
+    renderLinks();
+    return;
+  }
 
   // تصویر نهایی
   let image = imageUrl || null;
@@ -799,10 +824,9 @@ function showSyncMessage(text, type) {
 
 function getCloudPayload() {
   return {
-    categories: state.categories,
+    categories: state.categories.filter(c => c.id !== PERSONAL_CATEGORY_ID),
     links: state.links,
-    // Intentionally omit theme: each browser/device keeps its own appearance.
-    activeCategory: state.activeCategory,
+    // Active category and guest personal links are device-local, never synced.
     updatedAt: state.updatedAt || Date.now(),
   };
 }
@@ -836,7 +860,10 @@ async function pullFromCloud(showAlert = true) {
     remote.categories.forEach(c => { if (!c.color) c.color = "#4f6ef7"; });
     if (!Array.isArray(remote.links)) remote.links = [];
     const deviceTheme = getSavedLocalTheme() || state.theme || "light";
-    state = { ...defaultData, ...remote, theme: deviceTheme };
+    const localActiveCategory = state.activeCategory;
+    state = { ...defaultData, ...remote, theme: deviceTheme, activeCategory: localActiveCategory };
+    ensurePersonalCategory();
+    if (!state.categories.some(c => c.id === state.activeCategory)) state.activeCategory = "all";
     saveData(state, { skipCloud: true });
     applyTheme(deviceTheme); renderCategories(); renderLinks(); updateAdminUI();
     setSyncStatus("همگام با سرور ✓", "ok");
@@ -855,7 +882,8 @@ function openSyncModal() {
 
 function updateAdminUI() {
   const isAdmin = !!adminSession;
-  ["add-link-btn", "add-category-btn"].forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle("hidden", !isAdmin); });
+  const addLink = document.getElementById("add-link-btn"); if (addLink) addLink.classList.remove("hidden");
+  const addCategory = document.getElementById("add-category-btn"); if (addCategory) addCategory.classList.toggle("hidden", !isAdmin);
   const btn = document.getElementById("sync-settings-btn");
   if (btn) btn.textContent = isAdmin ? "مدیر (خروج)" : "ورود مدیر";
   const logout = document.getElementById("admin-logout-btn"); if (logout) logout.classList.toggle("hidden", !isAdmin);
@@ -968,6 +996,6 @@ window.addEventListener("online", () => {
 });
 
 // Guest mode: block any mutation form submission unless an authenticated manager is present.
-["link-form", "category-form"].forEach(id => document.getElementById(id)?.addEventListener("submit", e => { if (!adminSession) { e.preventDefault(); e.stopImmediatePropagation(); openSyncModal(); } }, true));
+document.getElementById("category-form")?.addEventListener("submit", e => { if (!adminSession) { e.preventDefault(); e.stopImmediatePropagation(); openSyncModal(); } }, true);
 
 document.addEventListener("click", (e) => { if (!adminSession && e.target.closest('[data-action="edit"], [data-action="delete"], .cat-delete')) { e.preventDefault(); e.stopImmediatePropagation(); openSyncModal(); } }, true);
