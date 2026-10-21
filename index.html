@@ -101,7 +101,7 @@
     <section id="gallery-page" class="gallery-page hidden">
       <div class="gallery-heading">
         <div><p class="gallery-kicker">INSPIRATION GALLERY</p><h2>گالری عکس</h2><p>مجموعه شخصی تصاویر شما؛ فایل‌ها از پوشه gallery خوانده می‌شوند</p></div>
-        <button id="gallery-refresh" class="btn btn-primary">⟳ تصاویر جدید</button>
+        <div class="gallery-actions"><button id="gallery-upload-btn" class="btn btn-primary hidden" type="button">＋ بارگذاری عکس</button><input id="gallery-upload-input" type="file" accept="image/*" multiple hidden><button id="gallery-refresh" class="btn btn-primary" type="button">⟳ تازه‌سازی</button></div>
       </div>
       <form id="gallery-search-form" class="gallery-search"><input id="gallery-search-input" type="search" placeholder="جستجو بر اساس نام یا برچسب تصویر..." aria-label="جستجو در گالری"><button class="btn btn-primary" type="submit">جستجو</button></form>
       <div id="gallery-status" class="gallery-status" aria-live="polite">در حال دریافت تصاویر...</div>

@@ -915,6 +915,7 @@ function openSyncModal() {
 
 function updateAdminUI() {
   const isAdmin = !!adminSession;
+  if (typeof syncGalleryAdminControls === "function") syncGalleryAdminControls();
   const addLink = document.getElementById("add-link-btn"); if (addLink) addLink.classList.remove("hidden");
   const addCategory = document.getElementById("add-category-btn"); if (addCategory) addCategory.classList.toggle("hidden", !isAdmin);
   const btn = document.getElementById("sync-settings-btn");
@@ -1015,10 +1016,35 @@ const galleryPage = document.getElementById("gallery-page");
 const linksPage = document.querySelector(".content");
 const categoriesBar = document.querySelector(".categories-bar-wrap");
 const galleryNavBtn = document.getElementById("gallery-nav-btn");
+const galleryUploadBtn = document.getElementById("gallery-upload-btn");
+const galleryUploadInput = document.getElementById("gallery-upload-input");
 let galleryLoaded = false;
 let galleryRequest = 0;
 let galleryQuery = "";
-
+const galleryDbName = "linkbox-gallery-local-v1";
+function openGalleryDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return reject(new Error("مرورگر از ذخیره‌سازی محلی پشتیبانی نمی‌کند"));
+    const req = indexedDB.open(galleryDbName, 1);
+    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains("photos")) req.result.createObjectStore("photos", { keyPath: "id" }); };
+    req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
+  });
+}
+async function galleryDbAll() {
+  const db = await openGalleryDB();
+  return new Promise((resolve, reject) => { const tx=db.transaction("photos","readonly"); const req=tx.objectStore("photos").getAll(); req.onsuccess=()=>resolve(req.result||[]); req.onerror=()=>reject(req.error); tx.oncomplete=()=>db.close(); });
+}
+async function galleryDbPut(photo) {
+  const db=await openGalleryDB();
+  return new Promise((resolve,reject)=>{ const tx=db.transaction("photos","readwrite"); tx.objectStore("photos").put(photo); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>{db.close();reject(tx.error);}; });
+}
+async function galleryDbDelete(id) {
+  const db=await openGalleryDB();
+  return new Promise((resolve,reject)=>{ const tx=db.transaction("photos","readwrite"); tx.objectStore("photos").delete(id); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>{db.close();reject(tx.error);}; });
+}
+const galleryHiddenKey = "linkbox-gallery-hidden-v1";
+function galleryHiddenIds(){ try{return new Set(JSON.parse(localStorage.getItem(galleryHiddenKey)||"[]"));}catch{return new Set();} }
+function syncGalleryAdminControls(){ galleryUploadBtn?.classList.toggle("hidden", !adminSession); }
 menuToggle?.addEventListener("click", () => {
   const open = topMenu.classList.toggle("hidden") === false;
   menuToggle.setAttribute("aria-expanded", String(open));
@@ -1034,58 +1060,84 @@ function showGallery(show) {
   categoriesBar?.classList.toggle("hidden", show);
   document.querySelector(".header-center")?.classList.toggle("hidden", show);
   if (galleryNavBtn) galleryNavBtn.innerHTML = show ? "<span>←</span> بازگشت به لینک‌ها" : "<span>▧</span> گالری عکس";
+  syncGalleryAdminControls();
   if (show && !galleryLoaded) loadGallery(galleryQuery);
   topMenu?.classList.add("hidden"); menuToggle?.setAttribute("aria-expanded", "false");
 }
 galleryNavBtn?.addEventListener("click", () => showGallery(galleryPage.classList.contains("hidden")));
-
-async function loadGallery(query = "") {
-  const grid = document.getElementById("gallery-grid");
-  const status = document.getElementById("gallery-status");
-  if (!grid || !status) return;
-  galleryQuery = query;
-  const requestId = ++galleryRequest;
-  status.textContent = "در حال بارگذاری تصاویر پوشه gallery…";
-  grid.innerHTML = "";
-  try {
-    // Browsers cannot list directory contents, so gallery/images.json is the manifest.
-    const response = await fetch(`./gallery/images.json?v=${Date.now()}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("gallery/images.json پیدا نشد");
-    const data = await response.json();
-    if (requestId !== galleryRequest) return;
-    const items = (Array.isArray(data) ? data : (data.images || [])).filter(item => {
-      if (typeof item === "string") return true;
-      return item && typeof item.src === "string";
-    }).map(item => typeof item === "string" ? { src: item, title: item.split("/").pop().replace(/\.[^.]+$/, "") } : item);
-    const term = (query || "").trim().toLocaleLowerCase();
-    const filtered = items.filter(item => !term || `${item.title || ""} ${item.tags || ""} ${item.src}`.toLocaleLowerCase().includes(term));
-    if (!filtered.length) {
-      status.textContent = items.length ? "برای این عبارت عکسی پیدا نشد؛ جستجوی دیگری وارد کنید." : "هنوز عکسی اضافه نشده؛ تصاویر را داخل پوشه gallery قرار دهید و نام آن‌ها را در gallery/images.json بنویسید.";
-      galleryLoaded = true;
-      return;
-    }
-    filtered.forEach((item, index) => {
-      const card = document.createElement("article"); card.className = "gallery-item";
-      const img = document.createElement("img"); img.loading = index < 6 ? "eager" : "lazy"; img.alt = item.title || "تصویر گالری"; img.src = `./gallery/${String(item.src).replace(/^\.\//, "").replace(/^gallery\//, "")}`;
-      img.onerror = () => { card.classList.add("gallery-item-error"); img.remove(); };
-      const title = document.createElement("div"); title.className = "gallery-item-title"; title.textContent = item.title || "تصویر گالری";
-      const open = document.createElement("a"); open.className = "gallery-open"; open.href = img.src; open.target = "_blank"; open.rel = "noopener noreferrer"; open.setAttribute("aria-label", `بازکردن ${title.textContent}`); open.textContent = "↗";
-      card.append(img, title, open); grid.appendChild(card);
-    });
-    status.textContent = `${filtered.length} تصویر از پوشه gallery · نمایش افقی 16:9`;
-    galleryLoaded = true;
-  } catch (error) {
-    if (requestId !== galleryRequest) return;
-    galleryLoaded = false;
-    status.textContent = "فهرست تصاویر خوانده نشد. مطمئن شوید پوشه gallery و فایل images.json کنار index.html قرار دارند.";
-    console.warn("Local gallery loading failed", error);
-  }
+async function compressGalleryPhoto(file) {
+  if (!file.type.startsWith("image/")) throw new Error(`${file.name} فایل تصویری نیست`);
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1920 / bitmap.width, 1080 / bitmap.height);
+  const canvas = document.createElement("canvas"); canvas.width=Math.max(1,Math.round(bitmap.width*scale)); canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const ctx=canvas.getContext("2d", {alpha:false}); ctx.drawImage(bitmap,0,0,canvas.width,canvas.height); bitmap.close?.();
+  return new Promise(resolve=>canvas.toBlob(blob=>resolve(blob),"image/jpeg",0.84));
 }
-document.getElementById("gallery-refresh")?.addEventListener("click", () => { galleryLoaded = false; loadGallery(galleryQuery); });
-document.getElementById("gallery-search-form")?.addEventListener("submit", event => {
-  event.preventDefault(); const query = document.getElementById("gallery-search-input").value.trim();
-  galleryLoaded = false; loadGallery(query || "");
+galleryUploadBtn?.addEventListener("click", () => { if (!adminSession) { openSyncModal(); return; } galleryUploadInput?.click(); });
+galleryUploadInput?.addEventListener("change", async () => {
+  if (!adminSession) { galleryUploadInput.value=""; openSyncModal(); return; }
+  const files=Array.from(galleryUploadInput.files||[]); if(!files.length)return;
+  const status=document.getElementById("gallery-status"); let done=0;
+  try {
+    for (const file of files) {
+      status.textContent=`در حال آماده‌سازی ${file.name} (${done+1}/${files.length})…`;
+      const blob=await compressGalleryPhoto(file);
+      if(!blob) throw new Error("فشرده‌سازی تصویر انجام نشد");
+      const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});
+      await galleryDbPut({id:`local-${Date.now()}-${Math.random().toString(36).slice(2)}`,title:file.name.replace(/\.[^.]+$/, ""),src:dataUrl,tags:"بارگذاری‌شده توسط مدیر",createdAt:Date.now(),local:true}); done++;
+    }
+    galleryLoaded=false; await loadGallery(galleryQuery); status.textContent=`${done} عکس با موفقیت در همین مرورگر ذخیره شد.`;
+  } catch(error) { status.textContent=`بارگذاری ناموفق بود: ${error.message||"فضای ذخیره‌سازی کافی نیست"}`; }
+  finally { galleryUploadInput.value=""; }
 });
+async function deleteGalleryPhoto(item) {
+  if (!adminSession) { openSyncModal(); return; }
+  if (!confirm(`عکس «${item.title||"بدون عنوان"}» حذف شود؟`)) return;
+  try {
+    if (item.local) await galleryDbDelete(item.id);
+    else { const hidden=galleryHiddenIds(); hidden.add(item.id); localStorage.setItem(galleryHiddenKey,JSON.stringify([...hidden])); }
+    galleryLoaded=false; await loadGallery(galleryQuery);
+  } catch(error) { alert("حذف عکس انجام نشد: "+(error.message||"خطای ذخیره‌سازی")); }
+}
+async function loadGallery(query = "") {
+  const grid=document.getElementById("gallery-grid"), status=document.getElementById("gallery-status");
+  if(!grid||!status)return;
+  galleryQuery=query; const requestId=++galleryRequest; status.textContent="در حال آماده‌سازی گالری…"; grid.replaceChildren();
+  try {
+    const response=await fetch("./gallery/images.json", {cache:"force-cache"});
+    if(!response.ok) throw new Error("gallery/images.json پیدا نشد");
+    const data=await response.json();
+    if(requestId!==galleryRequest)return;
+    const base=(Array.isArray(data)?data:(data.images||[])).filter(item=>typeof item==="string"||(item&&typeof item.src==="string")).map((item,index)=>{
+      const value=typeof item==="string"?{src:item,title:item.split("/").pop().replace(/\.[^.]+$/,"")}:item;
+      return {...value,id:`manifest-${value.src}`,local:false};
+    });
+    const hidden=galleryHiddenIds(); const local=await galleryDbAll();
+    if(requestId!==galleryRequest)return;
+    const all=[...local.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),...base.filter(item=>!hidden.has(item.id))];
+    const term=(query||"").trim().toLocaleLowerCase();
+    const filtered=all.filter(item=>!term||`${item.title||""} ${item.tags||""} ${item.src||""}`.toLocaleLowerCase().includes(term));
+    if(!filtered.length){status.textContent=all.length?"برای این عبارت عکسی پیدا نشد.":"هنوز عکسی وجود ندارد. مدیر می‌تواند از دکمه بارگذاری عکس استفاده کند.";galleryLoaded=true;return;}
+    const fragment=document.createDocumentFragment();
+    filtered.forEach((item,index)=>{
+      const card=document.createElement("article");card.className="gallery-item";
+      const img=document.createElement("img");img.loading=index<3?"eager":"lazy";img.decoding="async";img.fetchPriority=index<2?"high":"auto";img.alt=item.title||"تصویر گالری";
+      img.src=item.local?item.src:`./gallery/${String(item.src).replace(/^\.\//,"").replace(/^gallery\//,"")}`;
+      img.onerror=()=>{card.classList.add("gallery-item-error");};
+      const title=document.createElement("div");title.className="gallery-item-title";title.textContent=item.title||"تصویر گالری";
+      const open=document.createElement("a");open.className="gallery-open";open.href=img.src;open.target="_blank";open.rel="noopener noreferrer";open.setAttribute("aria-label",`بازکردن ${title.textContent}`);open.textContent="↗";
+      card.append(img,title,open);
+      if(adminSession){const del=document.createElement("button");del.type="button";del.className="gallery-delete";del.textContent="🗑";del.title="حذف عکس";del.setAttribute("aria-label","حذف عکس");del.addEventListener("click",()=>deleteGalleryPhoto(item));card.appendChild(del);}
+      fragment.appendChild(card);
+    });
+    grid.appendChild(fragment);status.textContent=`${filtered.length} تصویر · بارگذاری تنبل برای نمایش سریع‌تر`;
+    galleryLoaded=true;
+  }catch(error){if(requestId!==galleryRequest)return;galleryLoaded=false;status.textContent="فهرست تصاویر خوانده نشد. پوشه gallery و فایل images.json را بررسی کنید.";console.warn("Local gallery loading failed",error);}
+}
+document.getElementById("gallery-refresh")?.addEventListener("click",()=>{galleryLoaded=false;loadGallery(galleryQuery);});
+document.getElementById("gallery-search-form")?.addEventListener("submit",event=>{event.preventDefault();loadGallery(document.getElementById("gallery-search-input").value.trim());});
+// Reflect the current administrator session in the gallery controls.
+syncGalleryAdminControls();
 
 // ========== شروع ==========
 // Restore this device's own theme before cloud data is loaded.

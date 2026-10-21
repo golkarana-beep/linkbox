@@ -1339,3 +1339,9 @@ body {
 .gallery-open { position:absolute; z-index:4; top:10px; left:10px; width:38px; height:38px; display:grid; place-items:center; border-radius:12px; color:white; text-decoration:none; font-size:1.2rem; background:rgba(7,15,35,.62); border:1px solid rgba(255,255,255,.26); backdrop-filter:blur(12px); }
 .gallery-item-error { display:none; }
 @media(max-width:600px) { .gallery-heading { align-items:flex-start; padding:16px; flex-direction:column; } .gallery-heading .btn { width:100%; } .link-card-title { right:9px; bottom:9px; font-size:.82rem; } .link-card-actions { top:8px; right:8px; opacity:1; visibility:visible; transform:none; } }
+
+/* Gallery manager controls */
+.gallery-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.gallery-delete{position:absolute;z-index:6;top:10px;right:10px;width:40px;height:40px;border:1px solid rgba(255,255,255,.35);border-radius:12px;color:#fff;background:rgba(190,30,55,.82);backdrop-filter:blur(10px);cursor:pointer;opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .18s,transform .18s,visibility .18s}
+.gallery-item:hover .gallery-delete,.gallery-delete:focus-visible{opacity:1;visibility:visible;transform:none}
+@media(hover:none){.gallery-delete{opacity:1;visibility:visible;transform:none}}
