@@ -1203,3 +1203,99 @@ body {
 @media (hover: none) {
   .link-card-actions { opacity: 1; }
 }
+
+/* کارت لینک مینیمال: لوگو در تمام کارت، فقط نام پایین راست و عملیات هنگام hover */
+.link-card {
+  display: block;
+  position: relative;
+  isolation: isolate;
+  min-height: 170px;
+  aspect-ratio: 1.18 / 1;
+  overflow: hidden;
+  background: rgba(15, 23, 42, .42);
+  border: 1px solid rgba(255,255,255,.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.link-card-icon-area {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 0;
+}
+.link-card-icon-area::before { width: 72%; height: 72%; filter: blur(28px); opacity: .65; }
+.link-card-icon {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  object-fit: contain;
+  padding: 12%;
+  filter: drop-shadow(0 8px 22px rgba(0,0,0,.25));
+}
+.link-card-icon.cover {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  object-fit: cover;
+}
+.link-card-icon-fallback { width: 100%; height: 100%; font-size: clamp(3rem, 8vw, 6rem); }
+.link-card-body { display: none !important; }
+.link-card-title {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 30px 14px 12px;
+  color: #fff;
+  font-size: .98rem;
+  font-weight: 750;
+  text-align: right;
+  direction: rtl;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: linear-gradient( to top, rgba(5,10,25,.82), rgba(5,10,25,.22) 68%, transparent );
+  text-shadow: 0 1px 5px rgba(0,0,0,.5);
+}
+.link-card-actions {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 7px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: opacity .2s ease, transform .2s ease, visibility .2s ease;
+}
+.link-card:hover .link-card-actions,
+.link-card:focus-within .link-card-actions {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.link-card-actions .btn-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(15,23,42,.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 3px 12px rgba(0,0,0,.2);
+}
+.link-card-actions .btn-icon:hover { transform: scale(1.08); }
+.link-card-actions .btn-icon.danger { background: rgba(220,38,38,.82); }
+@media (hover: none) {
+  .link-card-actions { opacity: 1; visibility: visible; transform: none; }
+}

@@ -402,23 +402,12 @@ function renderLinks() {
       : `<span class="link-card-icon-fallback">✦</span>`;
 
     card.innerHTML = `
-      <div class="link-card-icon-area">
-        ${iconHtml}
+      <div class="link-card-icon-area">${iconHtml}</div>
+      <div class="link-card-actions" aria-label="عملیات لینک">
+        <button class="btn-icon" data-action="edit" title="ویرایش" aria-label="ویرایش لینک">✏️</button>
+        <button class="btn-icon danger" data-action="delete" title="حذف" aria-label="حذف لینک">🗑️</button>
       </div>
-      <div class="link-card-body">
-        <div class="link-card-title-row">
-          <span class="link-card-sparkle">✦</span>
-          <div class="link-card-title">${escapeHtml(link.title)}</div>
-        </div>
-        <div class="link-card-url">${escapeHtml(getDomain(link.url))}</div>
-        <div class="link-card-footer">
-          <div class="link-card-actions">
-            <button class="btn-icon danger" data-action="delete" title="حذف">🗑️</button>
-            <button class="btn-icon" data-action="edit" title="ویرایش">✏️</button>
-          </div>
-          <span class="link-card-cat" style="background:${cat ? cat.color : "#e91e63"}">${escapeHtml(cat ? cat.name : "بدون دسته")}</span>
-        </div>
-      </div>
+      <div class="link-card-title">${escapeHtml(link.title)}</div>
     `;
 
     card.querySelector('[data-action="edit"]').dataset.linkId = link.id;
