@@ -1154,3 +1154,52 @@ body {
 .gallery-item a span { font-weight:700; text-shadow:0 1px 6px #000; }
 .gallery-item .gallery-download { position:absolute; top:10px; left:10px; z-index:2; padding:7px 10px; border-radius:9px; color:#fff; text-decoration:none; background:rgba(0,0,0,.58); backdrop-filter:blur(8px); font-size:.8rem; }
 @media(max-width:700px) { .header-right { width:100%; justify-content:space-between; } .header { align-items:center; } .top-menu { right:auto; left:0; } .links-grid { grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:10px; } .link-card { aspect-ratio:1.25/1; } .gallery-heading { align-items:flex-start; flex-direction:column; } .gallery-search .btn { width:auto; } .gallery-grid { grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:11px; } }
+
+/* LinkBox: تمام‌کادر شدن لوگوی سایت در کارت‌های شیشه‌ای */
+.link-card {
+  aspect-ratio: 1.18 / 1;
+  background: rgba(15, 23, 42, .42);
+  border: 1px solid rgba(255,255,255,.24);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.link-card-icon-area {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,.14), rgba(15,23,42,.12) 70%);
+}
+.link-card-icon-area::before { width: 75%; height: 75%; opacity: .45; }
+.link-card-icon {
+  width: 100%; height: 100%; max-width: none; max-height: none;
+  padding: 18%; box-sizing: border-box; border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,.24));
+}
+.link-card-icon.cover {
+  padding: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: .92;
+}
+.link-card:hover .link-card-icon { transform: scale(1.04); }
+.link-card-body {
+  margin-top: auto;
+  width: 100%;
+  padding: 13px 14px 12px;
+  background: linear-gradient(180deg, transparent 0%, rgba(8,15,35,.68) 24%, rgba(8,15,35,.88) 100%);
+  border-top: 1px solid rgba(255,255,255,.15);
+  color: #fff;
+}
+.link-card-title { color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.45); }
+.link-card-url { color: rgba(255,255,255,.76); }
+.link-card-cat { color: #fff; }
+.link-card-actions { z-index: 5; }
+.link-card-actions .btn-icon { box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+@media (hover: hover) and (pointer: fine) {
+  .link-card-actions { opacity: 0; transform: translateY(-4px); transition: opacity .22s ease, transform .22s ease; }
+  .link-card:hover .link-card-actions, .link-card:focus-within .link-card-actions { opacity: 1; transform: translateY(0); }
+}
+@media (hover: none) {
+  .link-card-actions { opacity: 1; }
+}
