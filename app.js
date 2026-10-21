@@ -1017,7 +1017,7 @@ const categoriesBar = document.querySelector(".categories-bar-wrap");
 const galleryNavBtn = document.getElementById("gallery-nav-btn");
 let galleryLoaded = false;
 let galleryRequest = 0;
-let galleryQuery = "landscape nature";
+let galleryQuery = "";
 
 menuToggle?.addEventListener("click", () => {
   const open = topMenu.classList.toggle("hidden") === false;
@@ -1039,56 +1039,52 @@ function showGallery(show) {
 }
 galleryNavBtn?.addEventListener("click", () => showGallery(galleryPage.classList.contains("hidden")));
 
-async function loadGallery(query = "landscape nature") {
+async function loadGallery(query = "") {
   const grid = document.getElementById("gallery-grid");
   const status = document.getElementById("gallery-status");
   if (!grid || !status) return;
   galleryQuery = query;
   const requestId = ++galleryRequest;
-  status.textContent = "در حال جستجوی عکس‌های باکیفیت در اینترنت…";
+  status.textContent = "در حال بارگذاری تصاویر پوشه gallery…";
   grid.innerHTML = "";
   try {
-    const params = new URLSearchParams({
-      action: "query", format: "json", origin: "*", generator: "search",
-      gsrsearch: query, gsrnamespace: "6", gsrlimit: "40", gsrwhat: "text",
-      prop: "imageinfo", iiprop: "url|size|extmetadata", iiurlwidth: "1920"
-    });
-    const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`);
-    if (!response.ok) throw new Error("خطا در دریافت تصاویر");
+    // Browsers cannot list directory contents, so gallery/images.json is the manifest.
+    const response = await fetch(`./gallery/images.json?v=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("gallery/images.json پیدا نشد");
     const data = await response.json();
     if (requestId !== galleryRequest) return;
-    const pages = Object.values(data.query?.pages || {}).filter(page => {
-      const info = page.imageinfo?.[0];
-      const width = Number(info?.width || 0), height = Number(info?.height || 0);
-      return info && (info.thumburl || info.url) && width >= 1280 && height >= 720 && width / height >= 1.45;
-    }).sort((a,b) => {
-      const ai = a.imageinfo[0], bi = b.imageinfo[0];
-      return (bi.width * bi.height) - (ai.width * ai.height);
-    });
-    if (!pages.length) { status.textContent = "تصویری پیدا نشد؛ عبارت دیگری جستجو کنید."; galleryLoaded = true; return; }
-    for (const page of pages) {
-      const info = page.imageinfo[0];
-      const title = page.title.replace(/^File:/, "").replace(/\.[^.]+$/, "").replaceAll("_", " ");
-      const card = document.createElement("article"); card.className = "gallery-item";
-      const img = document.createElement("img"); img.loading = "lazy"; img.alt = title;
-      img.src = info.thumburl || info.url; img.width = 1920; img.height = 1080;
-      const source = document.createElement("a"); source.href = info.descriptionurl || `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`; source.target = "_blank"; source.rel = "noopener noreferrer"; source.innerHTML = `<span>${escapeHtml(title)}</span>`;
-      const download = document.createElement("a"); download.className = "gallery-download"; download.href = info.url; download.target = "_blank"; download.rel = "noopener noreferrer"; download.textContent = "نمایش تصویر اصلی ↗"; download.title = "بازکردن تصویر با کیفیت اصلی";
-      card.append(img, source, download); grid.appendChild(card);
+    const items = (Array.isArray(data) ? data : (data.images || [])).filter(item => {
+      if (typeof item === "string") return true;
+      return item && typeof item.src === "string";
+    }).map(item => typeof item === "string" ? { src: item, title: item.split("/").pop().replace(/\.[^.]+$/, "") } : item);
+    const term = (query || "").trim().toLocaleLowerCase();
+    const filtered = items.filter(item => !term || `${item.title || ""} ${item.tags || ""} ${item.src}`.toLocaleLowerCase().includes(term));
+    if (!filtered.length) {
+      status.textContent = items.length ? "برای این عبارت عکسی پیدا نشد؛ جستجوی دیگری وارد کنید." : "هنوز عکسی اضافه نشده؛ تصاویر را داخل پوشه gallery قرار دهید و نام آن‌ها را در gallery/images.json بنویسید.";
+      galleryLoaded = true;
+      return;
     }
-    status.textContent = `${pages.length} تصویر باکیفیت پیدا شد · نمایش 16:9 · برای دریافت نسخه اصلی روی «نمایش تصویر اصلی» بزنید.`;
+    filtered.forEach((item, index) => {
+      const card = document.createElement("article"); card.className = "gallery-item";
+      const img = document.createElement("img"); img.loading = index < 6 ? "eager" : "lazy"; img.alt = item.title || "تصویر گالری"; img.src = `./gallery/${String(item.src).replace(/^\.\//, "").replace(/^gallery\//, "")}`;
+      img.onerror = () => { card.classList.add("gallery-item-error"); img.remove(); };
+      const title = document.createElement("div"); title.className = "gallery-item-title"; title.textContent = item.title || "تصویر گالری";
+      const open = document.createElement("a"); open.className = "gallery-open"; open.href = img.src; open.target = "_blank"; open.rel = "noopener noreferrer"; open.setAttribute("aria-label", `بازکردن ${title.textContent}`); open.textContent = "↗";
+      card.append(img, title, open); grid.appendChild(card);
+    });
+    status.textContent = `${filtered.length} تصویر از پوشه gallery · نمایش افقی 16:9`;
     galleryLoaded = true;
   } catch (error) {
     if (requestId !== galleryRequest) return;
     galleryLoaded = false;
-    status.textContent = "دریافت تصاویر انجام نشد. اتصال اینترنت را بررسی کنید و روی «تصاویر جدید» بزنید.";
-    console.warn("Gallery loading failed", error);
+    status.textContent = "فهرست تصاویر خوانده نشد. مطمئن شوید پوشه gallery و فایل images.json کنار index.html قرار دارند.";
+    console.warn("Local gallery loading failed", error);
   }
 }
 document.getElementById("gallery-refresh")?.addEventListener("click", () => { galleryLoaded = false; loadGallery(galleryQuery); });
 document.getElementById("gallery-search-form")?.addEventListener("submit", event => {
   event.preventDefault(); const query = document.getElementById("gallery-search-input").value.trim();
-  galleryLoaded = false; loadGallery(query || "landscape nature");
+  galleryLoaded = false; loadGallery(query || "");
 });
 
 // ========== شروع ==========

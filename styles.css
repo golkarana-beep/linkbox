@@ -1310,3 +1310,32 @@ body {
 .link-card-title { position:relative; z-index:4; }
 .gallery-item .gallery-download { z-index:5; }
 .gallery-item > a:not(.gallery-download) { z-index:3; }
+
+
+/* LinkBox refinement: full-cover logo and bottom-right title */
+.link-card { isolation:isolate; }
+.link-card-icon-area { position:absolute; inset:0; width:100%; height:100%; z-index:0; background:transparent; }
+.link-card-icon-area::before { display:none; }
+.link-card-icon, .link-card-icon.cover { width:100%; height:100%; max-width:none; max-height:none; border-radius:0; object-fit:cover; filter:none; }
+.link-card:hover .link-card-icon, .link-card:hover .link-card-icon.cover { transform:scale(1.035); filter:none; }
+.link-card-icon:not(.cover) { object-fit:contain; padding:18%; box-sizing:border-box; background:transparent; }
+.link-card-icon-area::after { content:""; position:absolute; inset:35% 0 0; background:linear-gradient(180deg,transparent,rgba(4,10,25,.82)); pointer-events:none; z-index:2; }
+.link-card-title { position:absolute; right:14px; bottom:12px; z-index:4; max-width:calc(100% - 28px); padding:5px 10px; border-radius:9px; background:rgba(4,10,25,.42); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); color:#fff; font-size:.92rem; font-weight:750; text-align:right; direction:rtl; }
+.link-card-actions { position:absolute; top:10px; right:10px; z-index:6; opacity:0; visibility:hidden; transform:translateY(-5px); transition:opacity .18s ease,transform .18s ease,visibility .18s ease; }
+.link-card:hover .link-card-actions, .link-card:focus-within .link-card-actions { opacity:1; visibility:visible; transform:translateY(0); }
+.link-card:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.gallery-page { position:relative; padding:24px clamp(12px,2vw,30px) 42px; border:1px solid rgba(255,255,255,.18); border-radius:26px; background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.045)); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); box-shadow:0 24px 70px rgba(0,0,0,.2); }
+.gallery-heading { padding:22px 24px; border-radius:22px; color:#fff; background:linear-gradient(115deg,rgba(35,91,180,.78),rgba(118,53,173,.54),rgba(9,19,48,.65)); border:1px solid rgba(255,255,255,.2); box-shadow:inset 0 1px rgba(255,255,255,.2),0 14px 35px rgba(0,0,0,.16); }
+.gallery-heading h2 { color:#fff; font-size:clamp(1.7rem,3vw,2.5rem); }
+.gallery-heading p { color:rgba(255,255,255,.8); }
+.gallery-kicker { color:#a8d9ff!important; }
+.gallery-search { margin:18px 0 8px; padding:8px; border-radius:17px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.17); backdrop-filter:blur(14px); }
+.gallery-search input { border:0; background:rgba(5,14,35,.32); border-radius:12px; color:var(--text-primary); }
+.gallery-status { padding:12px 4px 16px; }
+.gallery-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr)); gap:18px; }
+.gallery-item { border:1px solid rgba(255,255,255,.22); border-radius:20px; box-shadow:0 12px 32px rgba(0,0,0,.2); transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease; }
+.gallery-item:hover { transform:translateY(-5px); border-color:rgba(133,191,255,.8); box-shadow:0 18px 38px rgba(0,0,0,.3),0 0 24px rgba(78,139,255,.18); }
+.gallery-item-title { position:absolute; z-index:3; right:0; bottom:0; left:0; padding:34px 16px 15px; color:#fff; font-weight:750; background:linear-gradient(transparent,rgba(4,9,24,.78)); text-align:right; direction:rtl; pointer-events:none; }
+.gallery-open { position:absolute; z-index:4; top:10px; left:10px; width:38px; height:38px; display:grid; place-items:center; border-radius:12px; color:white; text-decoration:none; font-size:1.2rem; background:rgba(7,15,35,.62); border:1px solid rgba(255,255,255,.26); backdrop-filter:blur(12px); }
+.gallery-item-error { display:none; }
+@media(max-width:600px) { .gallery-heading { align-items:flex-start; padding:16px; flex-direction:column; } .gallery-heading .btn { width:100%; } .link-card-title { right:9px; bottom:9px; font-size:.82rem; } .link-card-actions { top:8px; right:8px; opacity:1; visibility:visible; transform:none; } }
