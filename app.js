@@ -389,11 +389,21 @@ function renderLinks() {
     const isCustomImage = !!(link.image || (link.imageCached && link.image));
     const useCover = isCustomImage && imgSrc && !imgSrc.includes("favicons");
 
-    const card = document.createElement("a");
+    const card = document.createElement("div");
     card.className = "link-card";
-    card.href = link.url;
-    card.target = "_blank";
-    card.rel = "noopener noreferrer";
+    card.setAttribute("role", "link");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", `باز کردن ${link.title}`);
+    const openLink = () => window.open(link.url, "_blank", "noopener,noreferrer");
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
+      openLink();
+    });
+    card.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button, a")) {
+        event.preventDefault(); openLink();
+      }
+    });
 
     const iconHtml = imgSrc
       ? `<img src="${escapeAttr(imgSrc)}" alt="" class="link-card-icon${useCover ? " cover" : ""}" loading="lazy"
@@ -410,6 +420,7 @@ function renderLinks() {
       <div class="link-card-title">${escapeHtml(link.title)}</div>
     `;
 
+    card.dataset.url = link.url;
     card.querySelector('[data-action="edit"]').dataset.linkId = link.id;
     card.querySelector('[data-action="delete"]').dataset.linkId = link.id;
     card.querySelector('[data-action="edit"]').addEventListener("click", (e) => {
@@ -863,7 +874,8 @@ async function pullFromCloud(showAlert = true) {
   }
   if (!supabaseClient) { setSyncStatus("نیازمند تنظیم Supabase", "err"); if (showAlert) showSyncMessage("config.js را طبق README تنظیم کنید.", "err"); return false; }
   if (isSyncing) return false;
-  isSyncing = true; setSyncStatus("در حال دریافت…", "syncing");
+  isSyncing = true;
+  if (showAlert) setSyncStatus("در حال دریافت…", "syncing");
   try {
     const { data: row, error } = await supabaseClient.from("linkbox_content").select("data, updated_at").eq("id", 1).maybeSingle();
     if (error) throw error;
@@ -873,6 +885,13 @@ async function pullFromCloud(showAlert = true) {
     if (!remote.categories.some(c => c.id === "all")) remote.categories.unshift({ id:"all", name:"همه لینک‌ها", isSystem:true, color:"#4f6ef7" });
     remote.categories.forEach(c => { if (!c.color) c.color = "#4f6ef7"; });
     if (!Array.isArray(remote.links)) remote.links = [];
+    // Polling should not rebuild the DOM unless cloud content actually changed.
+    const remoteSignature = JSON.stringify({ categories: remote.categories, links: remote.links });
+    const localSignature = JSON.stringify({ categories: state.categories.filter(c => c.id !== PERSONAL_CATEGORY_ID), links: state.links });
+    if (remoteSignature === localSignature) {
+      setSyncStatus("همگام با سرور ✓", "ok");
+      return true;
+    }
     const deviceTheme = getSavedLocalTheme() || state.theme || "light";
     const localActiveCategory = loadActiveCategory() || state.activeCategory;
     state = { ...defaultData, ...remote, theme: deviceTheme, activeCategory: localActiveCategory };
@@ -904,7 +923,7 @@ function updateAdminUI() {
   document.querySelectorAll('[data-action="edit"], [data-action="delete"], .cat-delete').forEach(el => {
     const card = el.closest(".link-card");
     const linkId = card?.querySelector('[data-action="edit"]') ? (card.querySelector('[data-action="edit"]').dataset.linkId || null) : null;
-    const guestOwnsLink = !isAdmin && state.activeCategory === PERSONAL_CATEGORY_ID && guestLinks.some(l => l.id === (el.dataset.linkId || linkId) || (card && l.url === card.href));
+    const guestOwnsLink = !isAdmin && state.activeCategory === PERSONAL_CATEGORY_ID && guestLinks.some(l => l.id === (el.dataset.linkId || linkId) || (card && l.url === card.dataset.url));
     el.classList.toggle("hidden", !isAdmin && !guestOwnsLink);
   });
 }
@@ -921,7 +940,8 @@ async function initializeCloud() {
     if (session) setTimeout(() => pullFromCloud(false), 0);
   });
   // دریافت دوره‌ای برای تازه‌ماندن نمایش در دستگاه‌های مختلف
-  setInterval(() => { if (navigator.onLine && !isSyncing) pullFromCloud(false); }, 15000);
+  // Background sync less frequently to avoid UI churn; pullFromCloud now skips unchanged content.
+  setInterval(() => { if (navigator.onLine && !isSyncing && !localCloudDirty) pullFromCloud(false); }, 60000);
 }
 
 document.getElementById("admin-login-form")?.addEventListener("submit", async (event) => {
@@ -1030,7 +1050,7 @@ async function loadGallery(query = "landscape nature") {
   try {
     const params = new URLSearchParams({
       action: "query", format: "json", origin: "*", generator: "search",
-      gsrsearch: `filetype:bitmap ${query}`, gsrnamespace: "6", gsrlimit: "30",
+      gsrsearch: query, gsrnamespace: "6", gsrlimit: "40", gsrwhat: "text",
       prop: "imageinfo", iiprop: "url|size|extmetadata", iiurlwidth: "1920"
     });
     const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`);
@@ -1039,7 +1059,8 @@ async function loadGallery(query = "landscape nature") {
     if (requestId !== galleryRequest) return;
     const pages = Object.values(data.query?.pages || {}).filter(page => {
       const info = page.imageinfo?.[0];
-      return info && (info.thumburl || info.url) && (info.width || 0) >= 1280 && (info.height || 0) >= 720;
+      const width = Number(info?.width || 0), height = Number(info?.height || 0);
+      return info && (info.thumburl || info.url) && width >= 1280 && height >= 720 && width / height >= 1.45;
     }).sort((a,b) => {
       const ai = a.imageinfo[0], bi = b.imageinfo[0];
       return (bi.width * bi.height) - (ai.width * ai.height);
@@ -1059,7 +1080,8 @@ async function loadGallery(query = "landscape nature") {
     galleryLoaded = true;
   } catch (error) {
     if (requestId !== galleryRequest) return;
-    status.textContent = "دریافت تصاویر انجام نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.";
+    galleryLoaded = false;
+    status.textContent = "دریافت تصاویر انجام نشد. اتصال اینترنت را بررسی کنید و روی «تصاویر جدید» بزنید.";
     console.warn("Gallery loading failed", error);
   }
 }

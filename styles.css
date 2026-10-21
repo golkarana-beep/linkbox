@@ -1299,3 +1299,14 @@ body {
 @media (hover: none) {
   .link-card-actions { opacity: 1; visibility: visible; transform: none; }
 }
+
+/* Stability fixes: cards are interactive containers, action buttons remain consistently clickable. */
+.link-card { isolation:isolate; }
+.link-card-actions { position:absolute; top:10px; right:10px; z-index:10; opacity:0; visibility:hidden; pointer-events:none; }
+.link-card:hover .link-card-actions,
+.link-card:focus-within .link-card-actions { opacity:1; visibility:visible; pointer-events:auto; }
+.link-card-actions .btn-icon { cursor:pointer; border:1px solid rgba(255,255,255,.25); box-shadow:0 4px 14px rgba(0,0,0,.25); }
+.link-card[role="link"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.link-card-title { position:relative; z-index:4; }
+.gallery-item .gallery-download { z-index:5; }
+.gallery-item > a:not(.gallery-download) { z-index:3; }
