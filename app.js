@@ -62,6 +62,7 @@ function saveSyncConfig(cfg) {
 let syncConfig = loadSyncConfig();
 let syncTimer = null;
 let isSyncing = false;
+let localCloudDirty = false;
 
 function saveData(data, options = {}) {
   data.updatedAt = Date.now();
@@ -72,10 +73,11 @@ function saveData(data, options = {}) {
       alert("حافظه مرورگر پر شد. لطفاً چند لینک یا عکس را حذف کنید.");
     }
   }
-  // ارسال خودکار به سرور (با تأخیر کوتاه)
+  // تغییرات مدیر تا تأیید موفق سرور «در انتظار ذخیره» می‌مانند تا pull دوره‌ای آن‌ها را بازنویسی نکند.
   if (!options.skipCloud && adminSession && supabaseClient) {
+    localCloudDirty = true;
     clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = setTimeout(() => pushToCloud(false), 700);
+    cloudSaveTimer = setTimeout(() => pushToCloud(false), 900);
   }
 }
 
@@ -849,11 +851,14 @@ function getCloudPayload() {
 async function pushToCloud(showAlert = true) {
   if (!supabaseClient) { if (showAlert) showSyncMessage("ابتدا تنظیمات Supabase را در config.js وارد کنید.", "err"); return false; }
   if (!adminSession) { if (showAlert) showSyncMessage("برای ذخیره تغییرات باید با حساب مدیر وارد شوید.", "err"); return false; }
-  if (isSyncing) return false;
+  if (isSyncing) { clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(() => pushToCloud(showAlert), 1200); return false; }
   isSyncing = true; setSyncStatus("در حال ذخیره…", "syncing");
   try {
-    const { error } = await supabaseClient.from("linkbox_content").upsert({ id: 1, data: getCloudPayload(), updated_at: new Date().toISOString() });
+    const payload = getCloudPayload();
+    const { error } = await supabaseClient.from("linkbox_content").upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
     if (error) throw error;
+    if ((state.updatedAt || 0) <= (payload.updatedAt || 0)) localCloudDirty = false;
+    else { clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(() => pushToCloud(false), 300); }
     setSyncStatus("ذخیره ابری شد ✓", "ok");
     if (showAlert) showSyncMessage("تغییرات با موفقیت در فضای مشترک ذخیره شد.", "ok");
     return true;
@@ -862,6 +867,11 @@ async function pushToCloud(showAlert = true) {
 }
 
 async function pullFromCloud(showAlert = true) {
+  // اگر ویرایش محلی هنوز به ابر نرسیده، داده قدیمی سرور نباید جای آن را بگیرد.
+  if (localCloudDirty) {
+    if (!cloudSaveTimer && adminSession && !isSyncing) pushToCloud(false);
+    return false;
+  }
   if (!supabaseClient) { setSyncStatus("نیازمند تنظیم Supabase", "err"); if (showAlert) showSyncMessage("config.js را طبق README تنظیم کنید.", "err"); return false; }
   if (isSyncing) return false;
   isSyncing = true; setSyncStatus("در حال دریافت…", "syncing");
@@ -987,6 +997,87 @@ document.getElementById("import-file")?.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
   if (file) importData(file);
   e.target.value = "";
+});
+
+// ========== منوی بالای صفحه و گالری عکس ==========
+const menuToggle = document.getElementById("top-menu-toggle");
+const topMenu = document.getElementById("top-menu");
+const galleryPage = document.getElementById("gallery-page");
+const linksPage = document.querySelector(".content");
+const categoriesBar = document.querySelector(".categories-bar-wrap");
+const galleryNavBtn = document.getElementById("gallery-nav-btn");
+let galleryLoaded = false;
+let galleryRequest = 0;
+let galleryQuery = "landscape nature";
+
+menuToggle?.addEventListener("click", () => {
+  const open = topMenu.classList.toggle("hidden") === false;
+  menuToggle.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("click", (event) => {
+  if (topMenu && !topMenu.contains(event.target) && !menuToggle?.contains(event.target)) {
+    topMenu.classList.add("hidden"); menuToggle?.setAttribute("aria-expanded", "false");
+  }
+});
+function showGallery(show) {
+  galleryPage?.classList.toggle("hidden", !show);
+  linksPage?.classList.toggle("hidden", show);
+  categoriesBar?.classList.toggle("hidden", show);
+  document.querySelector(".header-center")?.classList.toggle("hidden", show);
+  if (galleryNavBtn) galleryNavBtn.innerHTML = show ? "<span>←</span> بازگشت به لینک‌ها" : "<span>▧</span> گالری عکس";
+  if (show && !galleryLoaded) loadGallery(galleryQuery);
+  topMenu?.classList.add("hidden"); menuToggle?.setAttribute("aria-expanded", "false");
+}
+galleryNavBtn?.addEventListener("click", () => showGallery(galleryPage.classList.contains("hidden")));
+
+async function loadGallery(query = "landscape nature") {
+  const grid = document.getElementById("gallery-grid");
+  const status = document.getElementById("gallery-status");
+  if (!grid || !status) return;
+  galleryQuery = query;
+  const requestId = ++galleryRequest;
+  status.textContent = "در حال جستجوی عکس‌های باکیفیت در اینترنت…";
+  grid.innerHTML = "";
+  try {
+    const params = new URLSearchParams({
+      action: "query", format: "json", origin: "*", generator: "search",
+      gsrsearch: `filetype:bitmap ${query}`, gsrnamespace: "6", gsrlimit: "30",
+      prop: "imageinfo", iiprop: "url|size|extmetadata", iiurlwidth: "1920"
+    });
+    const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`);
+    if (!response.ok) throw new Error("خطا در دریافت تصاویر");
+    const data = await response.json();
+    if (requestId !== galleryRequest) return;
+    const pages = Object.values(data.query?.pages || {}).filter(page => {
+      const info = page.imageinfo?.[0];
+      return info && (info.thumburl || info.url) && (info.width || 0) >= 1280 && (info.height || 0) >= 720;
+    }).sort((a,b) => {
+      const ai = a.imageinfo[0], bi = b.imageinfo[0];
+      return (bi.width * bi.height) - (ai.width * ai.height);
+    });
+    if (!pages.length) { status.textContent = "تصویری پیدا نشد؛ عبارت دیگری جستجو کنید."; galleryLoaded = true; return; }
+    for (const page of pages) {
+      const info = page.imageinfo[0];
+      const title = page.title.replace(/^File:/, "").replace(/\.[^.]+$/, "").replaceAll("_", " ");
+      const card = document.createElement("article"); card.className = "gallery-item";
+      const img = document.createElement("img"); img.loading = "lazy"; img.alt = title;
+      img.src = info.thumburl || info.url; img.width = 1920; img.height = 1080;
+      const source = document.createElement("a"); source.href = info.descriptionurl || `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`; source.target = "_blank"; source.rel = "noopener noreferrer"; source.innerHTML = `<span>${escapeHtml(title)}</span>`;
+      const download = document.createElement("a"); download.className = "gallery-download"; download.href = info.url; download.target = "_blank"; download.rel = "noopener noreferrer"; download.textContent = "نمایش تصویر اصلی ↗"; download.title = "بازکردن تصویر با کیفیت اصلی";
+      card.append(img, source, download); grid.appendChild(card);
+    }
+    status.textContent = `${pages.length} تصویر باکیفیت پیدا شد · نمایش 16:9 · برای دریافت نسخه اصلی روی «نمایش تصویر اصلی» بزنید.`;
+    galleryLoaded = true;
+  } catch (error) {
+    if (requestId !== galleryRequest) return;
+    status.textContent = "دریافت تصاویر انجام نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.";
+    console.warn("Gallery loading failed", error);
+  }
+}
+document.getElementById("gallery-refresh")?.addEventListener("click", () => { galleryLoaded = false; loadGallery(galleryQuery); });
+document.getElementById("gallery-search-form")?.addEventListener("submit", event => {
+  event.preventDefault(); const query = document.getElementById("gallery-search-input").value.trim();
+  galleryLoaded = false; loadGallery(query || "landscape nature");
 });
 
 // ========== شروع ==========
