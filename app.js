@@ -16,6 +16,15 @@ const SUPABASE_ANON_KEY = window.LINKBOX_CONFIG?.supabaseAnonKey || "";
 const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes("YOUR_PROJECT")) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let adminSession = null;
 let cloudSaveTimer = null;
+const VISITOR_KEY = "linkbox-visitor-id-v1";
+let dragSourceCategoryId = null;
+let dragSourceLinkId = null;
+function getVisitorId() {
+  try { let id = localStorage.getItem(VISITOR_KEY); if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : "v-" + Date.now() + "-" + Math.random().toString(36).slice(2)); localStorage.setItem(VISITOR_KEY, id); } return id; }
+  catch { return "session-" + Math.random().toString(36).slice(2); }
+}
+const visitorId = getVisitorId();
+let pageViewTracked = false;
 
 const defaultData = {
   categories: [
@@ -296,6 +305,14 @@ function renderCategories() {
     btn.className = `cat-chip${state.activeCategory === cat.id ? " active" : ""}`;
     btn.style.background = `linear-gradient(145deg, ${lighten(cat.color, 12)}, ${cat.color})`;
     btn.dataset.id = cat.id;
+    if (adminSession && cat.id !== "all" && cat.id !== PERSONAL_CATEGORY_ID) {
+      btn.draggable = true; btn.classList.add("sortable-category");
+      btn.addEventListener("dragstart", (e) => { dragSourceCategoryId = cat.id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", cat.id); btn.classList.add("dragging"); });
+      btn.addEventListener("dragend", () => { dragSourceCategoryId = null; btn.classList.remove("dragging"); $$(".cat-chip").forEach(x=>x.classList.remove("drag-over")); });
+      btn.addEventListener("dragover", (e) => { if (dragSourceCategoryId && dragSourceCategoryId !== cat.id) { e.preventDefault(); btn.classList.add("drag-over"); } });
+      btn.addEventListener("dragleave", () => btn.classList.remove("drag-over"));
+      btn.addEventListener("drop", (e) => { e.preventDefault(); btn.classList.remove("drag-over"); if (!dragSourceCategoryId || dragSourceCategoryId === cat.id) return; reorderCategories(dragSourceCategoryId, cat.id); });
+    }
 
     btn.innerHTML = `
       <span>${escapeHtml(cat.name)}</span>
@@ -391,10 +408,18 @@ function renderLinks() {
 
     const card = document.createElement("div");
     card.className = "link-card";
+    if (adminSession && state.activeCategory !== "all" && state.activeCategory !== PERSONAL_CATEGORY_ID && !searchQuery) {
+      card.draggable = true; card.classList.add("sortable-link");
+      card.addEventListener("dragstart", (e) => { dragSourceLinkId = link.id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", link.id); card.classList.add("dragging"); });
+      card.addEventListener("dragend", () => { dragSourceLinkId = null; card.classList.remove("dragging"); $$(".link-card").forEach(x=>x.classList.remove("drag-over")); });
+      card.addEventListener("dragover", (e) => { if (dragSourceLinkId && dragSourceLinkId !== link.id) { e.preventDefault(); card.classList.add("drag-over"); } });
+      card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+      card.addEventListener("drop", (e) => { e.preventDefault(); card.classList.remove("drag-over"); if (dragSourceLinkId && dragSourceLinkId !== link.id) reorderLinks(dragSourceLinkId, link.id); });
+    }
     card.setAttribute("role", "link");
     card.setAttribute("tabindex", "0");
     card.setAttribute("aria-label", `باز کردن ${link.title}`);
-    const openLink = () => window.open(link.url, "_blank", "noopener,noreferrer");
+    const openLink = () => { trackEvent("link_click", link); window.open(link.url, "_blank", "noopener,noreferrer"); };
     card.addEventListener("click", (event) => {
       if (event.target.closest("button, a")) return;
       openLink();
@@ -414,6 +439,7 @@ function renderLinks() {
     card.innerHTML = `
       <div class="link-card-icon-area">${iconHtml}</div>
       <div class="link-card-actions" aria-label="عملیات لینک">
+        ${adminSession ? `<button class="btn-icon favorite-btn${link.favorite ? " is-favorite" : ""}" data-action="favorite" title="${link.favorite ? "حذف از منتخب‌ها" : "افزودن به منتخب‌ها"}" aria-label="علاقه‌مندی">${link.favorite ? "★" : "☆"}</button>` : ""}
         <button class="btn-icon" data-action="edit" title="ویرایش" aria-label="ویرایش لینک">✏️</button>
         <button class="btn-icon danger" data-action="delete" title="حذف" aria-label="حذف لینک">🗑️</button>
       </div>
@@ -421,6 +447,8 @@ function renderLinks() {
     `;
 
     card.dataset.url = link.url;
+    const favoriteBtn = card.querySelector('[data-action="favorite"]');
+    if (favoriteBtn) favoriteBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); link.favorite = !link.favorite; saveData(state); logAudit(link.favorite ? "favorite_add" : "favorite_remove", link.title); renderLinks(); });
     card.querySelector('[data-action="edit"]').dataset.linkId = link.id;
     card.querySelector('[data-action="delete"]').dataset.linkId = link.id;
     card.querySelector('[data-action="edit"]').addEventListener("click", (e) => {
@@ -604,6 +632,7 @@ async function handleLinkSubmit(e) {
   }
 
   saveData(state);
+  logAudit(id ? "link_update" : "link_create", title);
   closeModal("link-modal");
   renderCategories();
   renderLinks();
@@ -722,6 +751,7 @@ function handleCategorySubmit(e) {
     isSystem: false,
   });
   saveData(state);
+  logAudit("category_create", name);
   closeModal("category-modal");
   renderCategories();
   populateCategorySelect();
@@ -758,8 +788,10 @@ function handleConfirmDelete() {
     state.categories = state.categories.filter((c) => c.id !== pendingDelete.id);
     if (state.activeCategory === pendingDelete.id) { state.activeCategory = "all"; saveActiveCategory("all"); }
   }
+  const deletedItem = pendingDelete;
   pendingDelete = null;
   saveData(state);
+  logAudit(deletedItem.type === "link" ? "link_delete" : "category_delete", deletedItem.id);
   closeModal("confirm-modal");
   renderCategories();
   renderLinks();
@@ -860,6 +892,7 @@ async function pushToCloud(showAlert = true) {
     if ((state.updatedAt || 0) <= (payload.updatedAt || 0)) localCloudDirty = false;
     else { clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(() => pushToCloud(false), 300); }
     setSyncStatus("ذخیره ابری شد ✓", "ok");
+    createCloudBackup(payload).catch(err => console.warn("Cloud backup failed", err));
     if (showAlert) showSyncMessage("تغییرات با موفقیت در فضای مشترک ذخیره شد.", "ok");
     return true;
   } catch (e) { console.error(e); setSyncStatus("خطا در ذخیره", "err"); if (showAlert) showSyncMessage("ذخیره ناموفق: " + (e.message || "اتصال را بررسی کنید"), "err"); return false; }
@@ -906,6 +939,74 @@ async function pullFromCloud(showAlert = true) {
   finally { isSyncing = false; }
 }
 
+// ========== آمار، علاقه‌مندی، مرتب‌سازی، پشتیبان و گزارش فعالیت ==========
+async function trackEvent(eventType, link = null) {
+  if (!supabaseClient || !navigator.onLine) return;
+  try { await supabaseClient.from("linkbox_events").insert({ event_type: eventType, link_id: link?.id || null, link_title: link?.title || null, category_id: link?.categoryId || null, visitor_id: visitorId }); }
+  catch (e) { console.debug("Event tracking unavailable", e); }
+}
+function logAudit(action, details = "") {
+  if (!adminSession || !supabaseClient) return;
+  supabaseClient.from("linkbox_audit").insert({ action, details: String(details).slice(0, 500), actor: adminSession.user?.email || "admin" }).then(({error}) => { if (error) console.warn("Audit log unavailable", error); });
+}
+function reorderCategories(sourceId, targetId) {
+  if (!adminSession) return;
+  const movable = state.categories.filter(c => c.id !== "all" && c.id !== PERSONAL_CATEGORY_ID);
+  const from = movable.findIndex(c=>c.id===sourceId), to = movable.findIndex(c=>c.id===targetId);
+  if (from < 0 || to < 0) return;
+  const [item] = movable.splice(from,1); movable.splice(to,0,item);
+  const fixed = state.categories.filter(c=>c.id==="all" || c.id===PERSONAL_CATEGORY_ID);
+  state.categories = [state.categories.find(c=>c.id==="all"), ...movable, ...fixed.filter(c=>c.id!=="all")].filter(Boolean);
+  saveData(state); logAudit("category_reorder", `${sourceId} → ${targetId}`); renderCategories(); renderLinks();
+}
+function reorderLinks(sourceId, targetId) {
+  if (!adminSession) return;
+  const categoryId = state.activeCategory;
+  const subset = state.links.filter(l=>l.categoryId===categoryId);
+  const from = subset.findIndex(l=>l.id===sourceId), to = subset.findIndex(l=>l.id===targetId);
+  if (from < 0 || to < 0) return;
+  const [item] = subset.splice(from,1); subset.splice(to,0,item);
+  let cursor=0; state.links = state.links.map(l=>l.categoryId===categoryId ? subset[cursor++] : l);
+  saveData(state); logAudit("link_reorder", `${sourceId} → ${targetId}`); renderLinks();
+}
+function downloadBackup() { exportData(); logAudit("backup_download", "دانلود پشتیبان JSON"); }
+async function createCloudBackup(payload = getCloudPayload()) {
+  if (!adminSession || !supabaseClient) return;
+  const { error } = await supabaseClient.from("linkbox_backups").insert({ data: payload, created_by: adminSession.user?.email || "admin" });
+  if (error) throw error;
+  // Keep a rolling 90-day backup window to prevent unbounded table growth.
+  await supabaseClient.from("linkbox_backups").delete().lt("created_at", new Date(Date.now() - 90 * 86400000).toISOString());
+}
+function statCard(label, value) { return `<div class="analytics-stat"><span>${escapeHtml(label)}</span><strong>${Number(value||0).toLocaleString("fa-IR")}</strong></div>`; }
+async function loadAnalytics() {
+  const status = document.getElementById("analytics-status");
+  if (!adminSession || !supabaseClient) { status.textContent = "برای مشاهده گزارش‌ها باید مدیر وارد شده باشد."; return; }
+  status.textContent = "در حال دریافت گزارش‌ها...";
+  const days = Number(document.getElementById("analytics-range").value || 30);
+  const since = new Date(Date.now() - days*86400000).toISOString();
+  try {
+    const [eventsRes, auditRes] = await Promise.all([
+      supabaseClient.from("linkbox_events").select("event_type,link_id,link_title,category_id,visitor_id,created_at").gte("created_at", since).order("created_at", {ascending:false}).limit(10000),
+      supabaseClient.from("linkbox_audit").select("action,details,actor,created_at").order("created_at", {ascending:false}).limit(30)
+    ]);
+    if (eventsRes.error) throw eventsRes.error;
+    if (auditRes.error) throw auditRes.error;
+    const events=eventsRes.data||[], views=events.filter(x=>x.event_type==="page_view"), clicks=events.filter(x=>x.event_type==="link_click");
+    const unique=new Set(views.map(x=>x.visitor_id).filter(Boolean)).size;
+    document.getElementById("analytics-stats").innerHTML = statCard("بازدید صفحه",views.length)+statCard("بازدیدکننده یکتا (تقریبی)",unique)+statCard("کلیک لینک‌ها",clicks.length)+statCard("تعداد دسته‌ها",state.categories.filter(c=>!c.isSystem).length);
+    const counts={}; clicks.forEach(e=>{const key=e.link_id||e.link_title||"نامشخص"; if(!counts[key]) counts[key]={title:e.link_title||key,count:0}; counts[key].count++;});
+    const popular=Object.values(counts).sort((a,b)=>b.count-a.count).slice(0,10);
+    document.getElementById("popular-links").innerHTML=popular.length?`<ol class="analytics-list">${popular.map(x=>`<li><span>${escapeHtml(x.title)}</span><b>${x.count.toLocaleString("fa-IR")}</b></li>`).join("")}</ol>`:"<p class='analytics-empty'>هنوز کلیکی ثبت نشده است.</p>";
+    document.getElementById("audit-list").innerHTML=(auditRes.data||[]).length?`<ul class="analytics-list audit-items">${auditRes.data.map(x=>`<li><span><b>${escapeHtml(x.action)}</b><small>${escapeHtml(x.details||"")} · ${new Date(x.created_at).toLocaleString("fa-IR")}</small></span><em>${escapeHtml(x.actor||"مدیر")}</em></li>`).join("")}</ul>`:"<p class='analytics-empty'>هنوز فعالیتی ثبت نشده است.</p>";
+    status.textContent=`گزارش ${days.toLocaleString("fa-IR")} روز گذشته · به‌روزرسانی ${new Date().toLocaleTimeString("fa-IR")}`;
+  } catch(e) { console.error(e); status.textContent="دریافت آمار ناموفق بود. ابتدا اسکریپت supabase-schema.sql را در Supabase اجرا کنید. جزئیات: "+(e.message||""); }
+}
+document.getElementById("analytics-nav-btn")?.addEventListener("click",()=>{ if(!adminSession){openSyncModal();return;} openModal("analytics-modal"); loadAnalytics(); });
+document.getElementById("analytics-refresh")?.addEventListener("click",loadAnalytics);
+document.getElementById("analytics-range")?.addEventListener("change",loadAnalytics);
+document.getElementById("backup-download")?.addEventListener("click",downloadBackup);
+document.getElementById("backup-now")?.addEventListener("click",async()=>{const b=document.getElementById("backup-now");b.disabled=true;try{await createCloudBackup();logAudit("backup_cloud","ایجاد پشتیبان ابری دستی");document.getElementById("analytics-status").textContent="نسخه پشتیبان ابری با موفقیت ایجاد شد.";}catch(e){document.getElementById("analytics-status").textContent="ایجاد پشتیبان ناموفق بود: "+(e.message||"");}finally{b.disabled=false;}});
+
 function openSyncModal() {
   const msg = document.getElementById("sync-message"); if (msg) msg.classList.add("hidden");
   document.getElementById("admin-logout-btn")?.classList.toggle("hidden", !adminSession);
@@ -918,6 +1019,7 @@ function updateAdminUI() {
   if (typeof syncGalleryAdminControls === "function") syncGalleryAdminControls();
   const addLink = document.getElementById("add-link-btn"); if (addLink) addLink.classList.remove("hidden");
   const addCategory = document.getElementById("add-category-btn"); if (addCategory) addCategory.classList.toggle("hidden", !isAdmin);
+  document.getElementById("analytics-nav-btn")?.classList.toggle("hidden", !isAdmin);
   const btn = document.getElementById("sync-settings-btn");
   if (btn) btn.textContent = isAdmin ? "مدیر (خروج)" : "ورود مدیر";
   const logout = document.getElementById("admin-logout-btn"); if (logout) logout.classList.toggle("hidden", !isAdmin);
@@ -927,6 +1029,8 @@ function updateAdminUI() {
     const guestOwnsLink = !isAdmin && state.activeCategory === PERSONAL_CATEGORY_ID && guestLinks.some(l => l.id === (el.dataset.linkId || linkId) || (card && l.url === card.dataset.url));
     el.classList.toggle("hidden", !isAdmin && !guestOwnsLink);
   });
+  // Rebuild controls so drag handles and favorite buttons immediately reflect login state.
+  if (typeof renderCategories === "function" && typeof renderLinks === "function") { renderCategories(); renderLinks(); }
 }
 
 async function initializeCloud() {
@@ -1045,14 +1149,20 @@ async function galleryDbDelete(id) {
 const galleryHiddenKey = "linkbox-gallery-hidden-v1";
 function galleryHiddenIds(){ try{return new Set(JSON.parse(localStorage.getItem(galleryHiddenKey)||"[]"));}catch{return new Set();} }
 function syncGalleryAdminControls(){ galleryUploadBtn?.classList.toggle("hidden", !adminSession); }
-menuToggle?.addEventListener("click", () => {
-  const open = topMenu.classList.toggle("hidden") === false;
+function setTopMenuOpen(open) {
+  if (!topMenu || !menuToggle) return;
+  topMenu.classList.toggle("hidden", !open);
   menuToggle.setAttribute("aria-expanded", String(open));
+  document.querySelector(".header")?.classList.toggle("menu-open", open);
+}
+menuToggle?.addEventListener("click", () => {
+  setTopMenuOpen(topMenu.classList.contains("hidden"));
 });
 document.addEventListener("click", (event) => {
-  if (topMenu && !topMenu.contains(event.target) && !menuToggle?.contains(event.target)) {
-    topMenu.classList.add("hidden"); menuToggle?.setAttribute("aria-expanded", "false");
-  }
+  if (topMenu && !topMenu.contains(event.target) && !menuToggle?.contains(event.target)) setTopMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && topMenu && !topMenu.classList.contains("hidden")) { setTopMenuOpen(false); menuToggle?.focus(); }
 });
 function showGallery(show) {
   galleryPage?.classList.toggle("hidden", !show);
@@ -1062,7 +1172,7 @@ function showGallery(show) {
   if (galleryNavBtn) galleryNavBtn.innerHTML = show ? "<span>←</span> بازگشت به لینک‌ها" : "<span>▧</span> گالری عکس";
   syncGalleryAdminControls();
   if (show && !galleryLoaded) loadGallery(galleryQuery);
-  topMenu?.classList.add("hidden"); menuToggle?.setAttribute("aria-expanded", "false");
+  setTopMenuOpen(false);
 }
 galleryNavBtn?.addEventListener("click", () => showGallery(galleryPage.classList.contains("hidden")));
 async function compressGalleryPhoto(file) {
@@ -1157,6 +1267,7 @@ setInterval(updateClock, 1000);
 setInterval(updateJalaliDate, 60000);
 
 initializeCloud();
+if (!pageViewTracked) { pageViewTracked = true; trackEvent("page_view"); }
 
 window.addEventListener("online", () => {
   state.links.forEach((link) => {

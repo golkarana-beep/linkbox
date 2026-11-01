@@ -25,6 +25,7 @@
             <button id="add-category-btn" class="menu-action"><span>▤</span> دسته‌بندی جدید</button>
             <button id="sync-settings-btn" class="menu-action" title="ورود مدیر"><span>☁</span> همگام‌سازی</button>
             <button id="gallery-nav-btn" class="menu-action"><span>▧</span> گالری عکس</button>
+            <button id="analytics-nav-btn" class="menu-action hidden"><span>▥</span> آمار و مدیریت</button>
             <span id="sync-status" class="sync-status" title="وضعیت همگام‌سازی"></span>
           </nav>
         </div>
@@ -222,6 +223,27 @@
           <button type="button" id="confirm-delete-btn" class="btn btn-danger">حذف</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- داشبورد آمار و مدیریت مدیر -->
+  <div id="analytics-modal" class="modal hidden">
+    <div class="modal-overlay" data-close="analytics-modal"></div>
+    <div class="modal-content analytics-modal-content">
+      <div class="modal-header"><h3>آمار و مدیریت لینک‌باکس</h3><button class="modal-close" data-close="analytics-modal">✕</button></div>
+      <div class="analytics-toolbar">
+        <label for="analytics-range">بازه گزارش</label>
+        <select id="analytics-range"><option value="1">امروز</option><option value="7">۷ روز گذشته</option><option value="30" selected>۳۰ روز گذشته</option><option value="90">۹۰ روز گذشته</option></select>
+        <button id="analytics-refresh" class="btn btn-primary" type="button">به‌روزرسانی</button>
+        <button id="backup-download" class="btn btn-secondary" type="button">دانلود پشتیبان</button>
+      </div>
+      <div id="analytics-status" class="analytics-status" aria-live="polite">در حال دریافت آمار...</div>
+      <div class="analytics-stats" id="analytics-stats"></div>
+      <div class="analytics-columns">
+        <section class="analytics-panel"><h4>پربازدیدترین لینک‌ها</h4><div id="popular-links"></div></section>
+        <section class="analytics-panel"><h4>فعالیت‌های اخیر مدیر</h4><div id="audit-list"></div></section>
+      </div>
+      <div class="analytics-footer"><span>نسخه پشتیبان ابری پس از ذخیره موفق تغییرات ساخته می‌شود.</span><button id="backup-now" class="btn btn-secondary" type="button">ایجاد پشتیبان ابری همین حالا</button></div>
     </div>
   </div>
 
